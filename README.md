@@ -1,0 +1,2 @@
+# Tip-Logger
+This is a simple python command line interface I am designing to make things convenient for me to log the tips I make at my job and keep track of some things
