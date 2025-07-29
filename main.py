@@ -35,6 +35,8 @@ def getTip():
 
 
 def report():
+    # date_worked, shift_length = date.fromisoformat("20250727"), 8
+    # tip = 84
     date_worked, shift_length = getDate()
     tip = getTip()
     log(date_worked, shift_length, tip)
@@ -43,7 +45,7 @@ def report():
 def getMonthFile(month, year):
     if isinstance(month, int):
         month = consts.MONTHS[month]
-    with open(f"{month}{year}.csv", "r") as file:
+    with open(f"{consts.PRIMARY_DIR_PATH}{month}{year}.csv", "r") as file:
         contents = file.readlines()
     return contents
 
@@ -53,9 +55,15 @@ def log(date_worked, hours, tip):
     try:
         file_contents = getMonthFile(month, date_worked.year)
     except FileNotFoundError:
-        file = open(f"{month}{date_worked.year}.csv", "w")
-        file.write(f"{date_worked.day},{hours},{tip}\n")
+        dirs = [consts.PRIMARY_DIR_PATH, consts.SECONDARY_DIR_PATH]
+
+        file = open(f"{dirs[0]}{month}{date_worked.year}.csv", "w")
+        file.write(f"{date_worked.day},{hours},{tip},\n")
         file.close()
+
+        backup = open(f"{dirs[1]}{month}{date_worked.year}.csv", "w")
+        backup.write(f"{date_worked.day},{hours},{tip},\n")
+        backup.close()
         return
 
     """
@@ -67,30 +75,38 @@ def log(date_worked, hours, tip):
     it inserts the data. Else, if every day in the file came before the
     input, it just appends it at the end
     """
-    for line, index in enumerate(file_contents):
-        separated = ",".split(line)
+    for index, line in enumerate(file_contents):
+        separated = line.split(",")
+        day = int(separated[0])
 
-        if separated[0] < date_worked.day:
+        if day < date_worked.day:
             continue
 
-        if separated[0] == date_worked.day:
+        if day == date_worked.day:
             separated[1] = hours
             separated[2] = tip
             new_line = ",".join(separated)
             file_contents[index] = new_line
             break
 
-        if separated[0] > date_worked.day:
-            new_line = f"{date_worked.day},{hours},{tip}"
+        if day > date_worked.day:
+            new_line = f"{date_worked.day},{hours},{tip},\n"
             file_contents.insert(index, new_line)
             break
 
         if index == len(file_contents)-1:
-            file_contents.append(f"{date_worked.day},{hours},{tip}")
+            file_contents.append(f"{date_worked.day},{hours},{tip},\n")
 
-    file = open(f"{month}{date_worked.year}.csv", "w")
+    dirs = [consts.PRIMARY_DIR_PATH, consts.SECONDARY_DIR_PATH]
+
+    file = open(f"{dirs[0]}{month}{date_worked.year}.csv", "w")
     file.writelines(file_contents)
     file.close()
+
+    backup = open(f"{dirs[1]}{month}{date_worked.year}.csv", "w")
+    backup.writelines(file_contents)
+    backup.close()
+
     return
 
 

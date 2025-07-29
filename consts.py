@@ -21,3 +21,7 @@ MONTHS = [None,
           "October",
           "November",
           "December"]
+
+# To Change upon implementation
+PRIMARY_DIR_PATH = "./"
+SECONDARY_DIR_PATH = "./backup/"
