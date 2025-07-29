@@ -25,3 +25,8 @@ MONTHS = [None,
 # To Change upon implementation
 PRIMARY_DIR_PATH = "./"
 SECONDARY_DIR_PATH = "./backup/"
+
+OPTIONS = '''
+(1) Report tip
+(2) View summed tips
+'''

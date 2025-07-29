@@ -34,15 +34,7 @@ def getTip():
             return tip
 
 
-def report():
-    # date_worked, shift_length = date.fromisoformat("20250727"), 8
-    # tip = 84
-    date_worked, shift_length = getDate()
-    tip = getTip()
-    log(date_worked, shift_length, tip)
-
-
-def getMonthFile(month, year):
+def getMonthData(month, year):
     if isinstance(month, int):
         month = consts.MONTHS[month]
     with open(f"{consts.PRIMARY_DIR_PATH}{month}{year}.csv", "r") as file:
@@ -53,7 +45,7 @@ def getMonthFile(month, year):
 def log(date_worked, hours, tip):
     month = consts.MONTHS[date_worked.month]
     try:
-        file_contents = getMonthFile(month, date_worked.year)
+        file_contents = getMonthData(month, date_worked.year)
     except FileNotFoundError:
         dirs = [consts.PRIMARY_DIR_PATH, consts.SECONDARY_DIR_PATH]
 
@@ -110,5 +102,80 @@ def log(date_worked, hours, tip):
     return
 
 
+def getRangeInput():
+    print("What range is the data spanning?")
+    while True:
+        try:
+            start = date.fromisoformat(input("Starting date? yyyymmdd "))
+            end = date.fromisoformat(input("ending date? yyyymmdd "))
+            if start > end:
+                start, end = end, start
+            if start == end:
+                print("Please give different dates")
+                continue
+            break
+        except ValueError:
+            print("Date(s) not accepted, please reinput")
+            continue
+    return start, end
+
+
+'''
+Currently this range function will ignore days that don't exist and continue,
+but not months. If a month doesn't exist, it errors and I am not in the mood
+to fix it right now
+'''
+def dataRange(start, end):
+    start_month = consts.MONTHS[start.month]
+    end_month = consts.MONTHS[end.month]
+    range_total = []
+
+    if end.year > start.year:
+        # Oh boy, can't wait to do this!
+        pass
+    else:
+        num_months = end.month-start.month
+
+        for i in range(num_months+1):
+            month = consts.MONTHS[start.month+i]
+            month_data = getMonthData(month, start.year)
+
+            for line in month_data:
+                separated = line.split(",")
+                if month == start_month and int(separated[0]) < start.day:
+                    continue
+                if month == end_month and int(separated[0]) > end.day:
+                    break
+                range_total.append(line)
+    return range_total
+
+
+def report():
+    date_worked, shift_length = getDate()
+    tip = getTip()
+    log(date_worked, shift_length, tip)
+
+
+def tipRange():
+    start, end = getRangeInput()
+    range_list = dataRange(start, end)
+    tips = [int(line.split(",")[2]) for line in range_list]
+    total = sum(tips)
+    print(f"You made a total of ${total}")
+
+
 if __name__ == "__main__":
-    report()
+    options = set(str(i+1) for i in range(2))
+    selection = None
+
+    print("Select what you would like to do: ")
+    while selection not in options:
+        selection = input(consts.OPTIONS)
+
+        match selection:
+            case "1":
+                report()
+            case "2":
+                tipRange()
+            case _:
+                print("Error in selection, please reinput")
