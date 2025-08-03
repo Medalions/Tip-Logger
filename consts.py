@@ -29,4 +29,6 @@ SECONDARY_DIR_PATH = "./backup/"
 OPTIONS = '''
 (1) Report tip
 (2) View summed tips
+(3) View last week
+(4) View last month
 '''
