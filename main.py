@@ -1,8 +1,12 @@
-import consts
+# Standard Libraries
 import filecmp
 from sys import exit
 from datetime import date, timedelta
 import matplotlib.pyplot as plt
+
+# Custom modules
+import consts
+from Day import Day
 
 dirs = [consts.PRIMARY_DIR_PATH, consts.SECONDARY_DIR_PATH]
 
@@ -21,7 +25,7 @@ def getDate():
         assertion = input(f"Correct date is {consts.MONTHS[choice.month]} " +
                           f"{choice.day}, {choice.year}? (y/n) ")
 
-        if assertion.upper() == "Y":
+        if assertion.upper() == "Y" or assertion.upper() == "YES":
             return choice, hours
 
 
@@ -35,16 +39,37 @@ def getTip():
             continue
 
         assertion = input(f"Correct amount is ${tip}? (y/n) ")
-        if assertion.upper() == "Y":
+        if assertion.upper() == "Y" or assertion.upper() == "YES":
             return tip
 
 
 def getMonthData(month, year):
     if isinstance(month, int):
         month = consts.MONTHS[month]
-    with open(f"{dirs[0]}{month}{year}.csv", "r") as file:
-        contents = file.readlines()
-    return contents
+    try:
+        with open(f"{dirs[0]}{month}{year}.csv", "r") as file:
+            contents = file.readlines()
+    except FileNotFoundError:
+        return []
+
+    month_str = str(consts.INV_MONTHS[month])
+    if len(month_str) == 1:
+        month_str = "0" + month_str
+
+    data = list()
+    for line in contents:
+        separated = line.split(",")
+        day = separated[0]
+        if len(day) == 1:  # Iso formate requires 2 digit day and month values
+            day = "0" + day
+
+        hours = int(separated[1])
+        tip = int(separated[2])
+
+        iso = date.fromisoformat(str(year) + month_str + day)
+        data.append(Day(iso, hours, tip))
+
+    return data
 
 
 def getRangeInput():
@@ -80,16 +105,16 @@ def getLastMonth():
 
 
 def log(date_worked, hours, tip):
-    month = consts.MONTHS[date_worked.month]
+    workday = Day(date_worked, hours, tip)
     try:
-        file_contents = getMonthData(month, date_worked.year)
+        file_contents = getMonthData(workday.month(), workday.year())
     except FileNotFoundError:
-        file = open(f"{dirs[0]}{month}{date_worked.year}.csv", "w")
-        file.write(f"{date_worked.day},{hours},{tip},\n")
+        file = open(f"{dirs[0]}{workday.month()}{workday.year()}.csv", "w")
+        file.write(workday.toCSV())
         file.close()
 
-        backup = open(f"{dirs[1]}{month}{date_worked.year}.csv", "w")
-        backup.write(f"{date_worked.day},{hours},{tip},\n")
+        backup = open(f"{dirs[1]}{workday.month()}{workday.year()}.csv", "w")
+        backup.write(workday.toCSV())
         backup.close()
         return
 
@@ -102,37 +127,29 @@ def log(date_worked, hours, tip):
     it inserts the data. Else, if every day in the file came before the
     input, it just appends it at the end
     """
-    for index, line in enumerate(file_contents):
-        separated = line.split(",")
-        day = int(separated[0])
-
-        if day < date_worked.day:
+    for index, shift in enumerate(file_contents):
+        if shift.day() < workday.day():
             continue
 
-        if day == date_worked.day:
-            separated[1] = str(hours)
-            separated[2] = str(tip)
-            new_line = ",".join(separated)
-            file_contents[index] = new_line
+        if shift.day() == workday.day():
+            file_contents[index] = workday
             break
 
-        if day > date_worked.day:
-            new_line = f"{date_worked.day},{hours},{tip},\n"
-            file_contents.insert(index, new_line)
+        if shift.day() > workday.day():
+            file_contents.insert(index, workday)
             break
 
         if index == len(file_contents)-1:
-            file_contents.append(f"{date_worked.day},{hours},{tip},\n")
+            file_contents.append(workday)
 
-    writeToFiles(file_contents, month, date_worked.year)
+    CSV_lines = [shift.toCSV() for shift in file_contents]
+    writeToFiles(CSV_lines, workday)
     return
 
 
-def writeToFiles(contents, month, year):
-    if isinstance(month, int):
-        month = consts.MONTHS[month]
-    file = f"{dirs[0]}{month}{year}.csv"
-    backup = f"{dirs[1]}{month}{year}.csv"
+def writeToFiles(contents, workday):
+    file = f"{dirs[0]}{workday.month()}{workday.year()}.csv"
+    backup = f"{dirs[1]}{workday.month()}{workday.year()}.csv"
 
     if not filecmp.cmp(file, backup, shallow=False):
         print("Error, the main file and backup file are not identical")
@@ -148,11 +165,6 @@ def writeToFiles(contents, month, year):
 
 
 def dataRange(start, end):
-    '''
-    Currently this range function will ignore days that don't exist and
-    continue, but not months. If a month doesn't exist, it errors and I
-    am not in the mood to fix it right now
-    '''
     start_month = consts.MONTHS[start.month]
     end_month = consts.MONTHS[end.month]
     range_total = []
@@ -167,13 +179,12 @@ def dataRange(start, end):
             month = consts.MONTHS[start.month+i]
             month_data = getMonthData(month, start.year)
 
-            for line in month_data:
-                separated = line.split(",")
-                if month == start_month and int(separated[0]) < start.day:
+            for shift in month_data:
+                if shift.month() == start_month and shift.day() < start.day:
                     continue
-                if month == end_month and int(separated[0]) > end.day:
+                if shift.month() == end_month and shift.day() > end.day:
                     break
-                range_total.append(line)
+                range_total.append(shift)
     return range_total
 
 
@@ -184,41 +195,57 @@ def report():
 
 
 def tipRange(start, end):
-    range_list = dataRange(start, end)
-    days = [int(line.split(",")[0]) for line in range_list]
-    tips = [int(line.split(",")[2]) for line in range_list]
-    total = sum(tips)
-    print(f"You made a total of ${total}")
+    shifts = dataRange(start, end)
+    if start.month == end.month:
+        days = [shift.day() for shift in shifts]
+    else:  # This branch is confusing, but it cleans up axis vars in plot
+        days = [shift.date() for shift in shifts]
+
+    tips = [shift.tip for shift in shifts]
+    hours = [shift.hours for shift in shifts]
+    wage = (sum(tips)/sum(hours))+consts.BASE_WAGE
+
+    print(f"You made a total of ${sum(tips)}")
+    print(f"Approximate wage = ${wage:.2f}/hour")
     plot_trend(days, tips)
 
 
 def reportWeek():
     start, end = getLastWeek()
-    range_list = dataRange(start, end)
-    days = [int(line.split(",")[0]) for line in range_list]
-    tips = [int(line.split(",")[2]) for line in range_list]
+    shifts = dataRange(start, end)
+
+    tips = [shift.tip for shift in shifts]
+    hours = [shift.hours for shift in shifts]
     total = sum(tips)
+    wage = (sum(tips)/sum(hours))+consts.BASE_WAGE
+
     print(f"Total tips last week: {total}")
+    print(f"Approximate wage = ${wage:.2f}/hour")
     if total < 400:
         print("Not enough last week")
     else:
         print("After $350 in savings and $50 to credit cards, " +
               f"you have ${total-400} for yourself")
-    plot_trend(days, tips, is_week=True)
+    plot_trend(shifts, tips, is_week=True)
 
 
 def reportMonth():
     start, end = getLastMonth()
-    range_list = dataRange(start, end)
-    days = [int(line.split(",")[0]) for line in range_list]
-    tips = [int(line.split(",")[2]) for line in range_list]
+    shifts = dataRange(start, end)
+
+    days = [shift.day() for shift in shifts]
+    tips = [shift.tip for shift in shifts]
+    hours = [shift.hours for shift in shifts]
+    wage = (sum(tips)/sum(hours))+consts.BASE_WAGE
+
     print(f"Last month, you made a total of ${sum(tips)}")
+    print(f"Approximate wage = ${wage:.2f}/hour")
     plot_trend(days, tips)
 
 
 def plot_trend(days, tips, is_week=False):
-    if len(tips) == 7 and is_week:
-        indices = [consts.DAYS[(i+1) % 7] for i in range(7)]  # This line sucks
+    if is_week:
+        indices = [day.weekday() for day in days]
         plt.xlabel("Weekday")
     else:
         indices = [str(day) for day in days]
@@ -229,7 +256,7 @@ def plot_trend(days, tips, is_week=False):
     plt.show()
 
 
-if __name__ == "__main__":
+def main():
     options = set(str(i+1) for i in range(4))
     selection = None
 
@@ -249,3 +276,7 @@ if __name__ == "__main__":
                 reportMonth()
             case _:
                 print("Error in selection, please reinput")
+
+
+if __name__ == "__main__":
+    main()
